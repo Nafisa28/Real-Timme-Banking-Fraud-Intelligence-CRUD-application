@@ -1,0 +1,72 @@
+name: CI/CD Pipeline — Real-Time Banking Fraud Intelligence System
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci || npm install
+
+      - name: Run Backend Unit Tests
+        run: |
+          cd backend
+          npm test
+
+  test-ml-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Evaluate ML Model Precision & Recall
+        run: |
+          python -c "
+          from ml_service.model import ml_model
+          metrics = ml_model.train_on_synthetic(1000)
+          print('Synthetic Model Evaluation Metrics:', metrics)
+          assert metrics['precision'] >= 0.80, 'Precision failed SLA threshold (>= 0.80)'
+          assert metrics['recall'] >= 0.80, 'Recall failed SLA threshold (>= 0.80)'
+          "
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci || npm install
+
+      - name: Build Frontend Production SPA Bundle
+        run: |
+          cd frontend
+          npm run build
