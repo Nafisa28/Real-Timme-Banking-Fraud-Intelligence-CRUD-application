@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: banking-fraud-backend
+    env: node
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://mmdvlnxbofjrhtnenanc.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tZHZsbnhib2Zqcmh0bmVuYW5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0MzYzNzgsImV4cCI6MjEwMjAxMjM3OH0.BNpGz4T2WYNUhV4kRlAjYI_TSw4caLppUQ60z2jd4KE
+      - key: JWT_SECRET
+        generateValue: true

@@ -1,0 +1,25 @@
+# Dependencies — never commit node_modules
+node_modules/
+npm-debug.log*
+
+# Build output
+frontend/dist/
+frontend/.env.local
+frontend/.env.production
+
+# Backend secrets and local data
+backend/.env
+backend/data/
+
+# Python
+__pycache__/
+*.pyc
+ml_service/__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
