@@ -195,8 +195,9 @@ async function evaluateRules(txnData) {
     }
   }
 
-  // Normalize final rule score between 0 and 100
-  const normalizedRuleScore = Math.min(100, Math.round((totalScore / (maxPossibleScore || 100)) * 100));
+  // Normalize final rule score between 0 and 100 based on max achievable single-transaction score cap
+  const maxAchievableCap = 135;
+  const normalizedRuleScore = Math.min(100, Math.round((totalScore / maxAchievableCap) * 100));
 
   return {
     rule_score: normalizedRuleScore,

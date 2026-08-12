@@ -25,17 +25,30 @@ export async function apiFetch(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeout || 10000);
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || 'API request failed');
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'API request failed');
+    }
+
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Backend request timed out. Please check if the backend server is reachable.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return data;
 }
 
 export function createWebSocketConnection(onMessage, onStatusChange) {

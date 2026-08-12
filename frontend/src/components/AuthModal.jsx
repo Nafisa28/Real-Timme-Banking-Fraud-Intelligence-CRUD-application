@@ -19,30 +19,61 @@ export default function AuthModal({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      // Step 1: Register user with Supabase Auth (sends verification email automatically)
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name, role }  // Store metadata in Supabase Auth
-        }
-      });
-
-      if (signUpError) throw new Error(signUpError.message);
-
-      // Step 2: Also register in our backend DB (pending email verification)
+      // Step 1: Register in local backend DB first
+      let backendRegistered = false;
       try {
         await apiFetch('/auth/signup', {
           method: 'POST',
           body: JSON.stringify({ name, email, password, role })
         });
+        backendRegistered = true;
       } catch (backendErr) {
-        // Ignore if user already exists in backend (Supabase is source of truth for auth)
+        if (backendErr.message.toLowerCase().includes('already exists')) {
+          setError('An account with this email already exists. Switching to Login...');
+          setTimeout(() => setIsSignup(false), 1200);
+          setLoading(false);
+          return;
+        }
         console.warn('Backend signup note:', backendErr.message);
       }
 
-      // Show verification sent screen — do NOT log the user in yet
-      setVerificationSent(true);
+      // Step 2: Try Supabase Auth with a 6-second timeout to avoid hanging UI
+      let supabaseSuccess = false;
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase Auth connection timeout')), 6000)
+        );
+
+        const signUpPromise = supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { name, role }
+          }
+        });
+
+        const { data, error: signUpError } = await Promise.race([signUpPromise, timeoutPromise]);
+
+        if (signUpError) {
+          if (signUpError.message.toLowerCase().includes('already') || signUpError.code === 'user_already_exists') {
+            setError('Account already registered! Switching to Login...');
+            setTimeout(() => setIsSignup(false), 1200);
+            setLoading(false);
+            return;
+          }
+          console.warn('Supabase Auth note:', signUpError.message);
+        } else {
+          supabaseSuccess = true;
+        }
+      } catch (sbErr) {
+        console.warn('Supabase Auth note:', sbErr.message);
+      }
+
+      if (backendRegistered || supabaseSuccess) {
+        setVerificationSent(true);
+      } else {
+        throw new Error('Could not complete signup. Please try again.');
+      }
     } catch (err) {
       setError(err.message || 'Signup failed. Please try again.');
     } finally {
@@ -56,28 +87,53 @@ export default function AuthModal({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      // Step 1: Verify with Supabase Auth first
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      // Step 1: Attempt local backend login directly
+      let backendData = null;
+      let backendErr = null;
 
-      if (authError) {
-        // Handle unverified email specifically
-        if (authError.message.toLowerCase().includes('email not confirmed')) {
-          throw new Error('Please verify your email first. Check your inbox for the verification link.');
-        }
-        throw new Error(authError.message);
+      try {
+        backendData = await apiFetch('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+      } catch (bErr) {
+        backendErr = bErr;
       }
 
-      // Step 2: Log in via our backend (get JWT + user data)
-      const data = await apiFetch('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
-      });
+      if (backendData && backendData.token) {
+        setAuthToken(backendData.token);
+        onLoginSuccess(backendData.user);
+        return;
+      }
 
-      setAuthToken(data.token);
-      onLoginSuccess(data.user);
+      // Step 2: If backend login fails, check Supabase Auth with a timeout
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase connection timeout')), 6000)
+        );
+
+        const signInPromise = supabase.auth.signInWithPassword({ email, password });
+        const { data: authData, error: authError } = await Promise.race([signInPromise, timeoutPromise]);
+
+        if (authError) {
+          if (authError.message.toLowerCase().includes('email not confirmed')) {
+            throw new Error('Please verify your email first. Check your inbox for the verification link.');
+          }
+          throw new Error(authError.message);
+        }
+
+        // After Supabase auth succeeds, login to backend
+        const data = await apiFetch('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+
+        setAuthToken(data.token);
+        onLoginSuccess(data.user);
+        return;
+      } catch (sbErr) {
+        throw backendErr || sbErr;
+      }
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
