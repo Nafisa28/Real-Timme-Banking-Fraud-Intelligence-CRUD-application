@@ -1,6 +1,6 @@
-// Uses VITE_API_URL in production (set in Vercel env vars to point to Render backend)
-// Falls back to localhost for local development
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Automatically resolves production backend URL when deployed (e.g. Vercel)
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const API_BASE = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://localhost:5000/api' : 'https://banking-fraud-backend.onrender.com/api');
 
 let token = localStorage.getItem('token') || '';
 
@@ -25,8 +25,10 @@ export async function apiFetch(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
+  // 35s timeout to allow Render free-tier cold-start wakeups on deployed environments
+  const timeoutMs = options.timeout || (isLocalhost ? 10000 : 35000);
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), options.timeout || 10000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -43,7 +45,7 @@ export async function apiFetch(endpoint, options = {}) {
     return data;
   } catch (err) {
     if (err.name === 'AbortError') {
-      throw new Error('Backend request timed out. Please check if the backend server is reachable.');
+      throw new Error('Backend server is waking up or unreachable. Please wait 10 seconds and try again.');
     }
     throw err;
   } finally {
@@ -52,7 +54,7 @@ export async function apiFetch(endpoint, options = {}) {
 }
 
 export function createWebSocketConnection(onMessage, onStatusChange) {
-  const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5000/ws';
+  const wsUrl = import.meta.env.VITE_WS_URL || (isLocalhost ? 'ws://localhost:5000/ws' : 'wss://banking-fraud-backend.onrender.com/ws');
   let ws = null;
   let reconnectTimer = null;
 
