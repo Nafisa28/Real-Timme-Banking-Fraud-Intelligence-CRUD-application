@@ -28,20 +28,8 @@ const app = express();
 const server = http.createServer(app);
 
 // Middleware
-// Allow Vercel frontend + localhost for dev
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowed = [
-      /^http:\/\/localhost:\d+$/,
-      /\.vercel\.app$/,
-      /\.onrender\.com$/
-    ];
-    if (!origin || allowed.some(r => r.test(origin))) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS: origin not allowed'));
-    }
-  },
+  origin: true,
   credentials: true
 }));
 app.use(express.json());
@@ -79,6 +67,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/audit-logs', auditRoutes);
 
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
 
 const alasql = require('alasql');
 const { fullSync, isSchemaReady } = require('./db/supabaseSync');
@@ -90,9 +79,9 @@ async function bootstrap() {
     initWebSocket(server);
     startAutoEscalationCron(30, 60); // Check every 30 sec for 60 min SLA
 
-    server.listen(PORT, () => {
-      console.log(`Backend Express Server running on port ${PORT}`);
-      console.log(`WebSocket Server listening on ws://localhost:${PORT}/ws`);
+    server.listen(PORT, HOST, () => {
+      console.log(`Backend Express Server running on http://${HOST}:${PORT}`);
+      console.log(`WebSocket Server listening on ws://${HOST}:${PORT}/ws`);
     });
 
     // ── Supabase full sync on startup (async, non-blocking) ──────────
